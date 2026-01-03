@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Love Shooter 💘</title>
+  <meta name="theme-color" content="#ff7a84" />
+  <style>
+    :root{
+      --bg1:#ff5f6d;
+      --bg2:#ffc371;
+      --heart-size:44px;
+      --control-radius:28px;
+      --max-width:1200px;
+    }
+
+    html,body{
+      height:100%;
+      margin:0;
+      font-family:Arial, Helvetica, sans-serif;
+      background:linear-gradient(135deg,var(--bg1),var(--bg2));
+      color:#fff;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    .wrap{
+      max-width:var(--max-width);
+      margin:0 auto;
+      height:100vh;
+      position:relative;
+      overflow:hidden;
+    }
+
+    header{
+      position:fixed;
+      top:12px;
+      left:12px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      z-index:1000;
+    }
+
+    #score{
+      background:rgba(255,255,255,0.08);
+      padding:10px 14px;
+      border-radius:20px;
+      font-weight:700;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      font-size:18px;
+    }
+
+    .controls{
+      display:flex;
+      gap:8px;
+      margin-left:6px;
+    }
+
+    .controls button{
+      border:0;
+      background:rgba(255,255,255,0.12);
+      color:#fff;
+      padding:8px 12px;
+      border-radius:var(--control-radius);
+      cursor:pointer;
+      font-weight:600;
+      min-width:60px;
+    }
+
+    .controls button:active{ transform:scale(.98); }
+    .controls button[aria-pressed="true"]{ box-shadow:0 4px 12px rgba(0,0,0,0.25); }
+
+    #best {
+      position:fixed;
+      top:12px;
+      right:12px;
+      background:rgba(255,255,255,0.06);
+      padding:8px 12px;
+      border-radius:20px;
+      font-weight:600;
+      z-index:1000;
+    }
+
+    .heart{
+      position:absolute;
+      left:0;
+      top:0;
+      font-size:var(--heart-size);
+      pointer-events:auto;
+      user-select:none;
+      touch-action:manipulation;
+      will-change:transform,opacity;
+      transform:translateY(-150px);
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+
+    @keyframes fall {
+      from { transform: translateY(-150px) scale(0.9); opacity:1; }
+      to   { transform: translateY(110vh) scale(1.05); opacity:0.95; }
+    }
+
+    /* Respect prefers-reduced-motion */
+    @media (prefers-reduced-motion: reduce) {
+      .heart { animation: none !important; transition: none !important; }
+    }
+
+    /* Message overlay */
+    #message {
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.85);
+      color:#fff;
+      z-index:2000;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      flex-direction:column;
+      padding:20px;
+    }
+    #message h1{ font-size:28px; margin:0 0 10px; }
+    #message p{ margin:0 0 18px; max-width:540px; }
+
+    #message .actions{ display:flex; gap:10px; margin-top:10px; }
+    #message button{ padding:12px 18px; border-radius:24px; border:0; cursor:pointer; font-weight:700; }
+
+    .yes { background:#ff5f6d; color:white; }
+    .no  { background:#ccc; color:#333; }
+
+    /* small screens */
+    @media (max-width:520px){
+      #score{ font-size:16px; padding:8px 10px; }
+      .controls button{ padding:6px 10px; min-width:50px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="game">
+    <header>
+      <div id="score" role="status" aria-live="polite" aria-atomic="true">❤️ 0</div>
+      <div class="controls" role="group" aria-label="Game controls">
+        <button id="startBtn" aria-pressed="false">Start</button>
+        <button id="pauseBtn" aria-pressed="false">Pause</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+    </header>
+
+    <div id="best" aria-hidden="false">Best: ❤️ 0</div>
+
+    <div id="message" role="dialog" aria-modal="true" aria-labelledby="msgTitle">
+      <h1 id="msgTitle">💖 Aku suka kamu 💖</h1>
+      <p>Setelah semua hati ini, bolehkah aku menjagamu?</p>
+      <div class="actions">
+        <button class="yes" id="yesBtn">Mau 💕</button>
+        <button class="no" id="noBtn">Malu 🙈</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configuration / constants
+    const targetScore = 10;
+    const spawnInterval = 800; // ms between spawn attempts
+    const maxConcurrentHearts = 28; // prevent DOM overload
+    const heartLifetime = 6000; // ms before auto-remove
+    const heartMinSize = 28; // px
+    const heartMaxSize = 60; // px
+
+    // State
+    let score = 0;
+    let running = false;
+    let spawnTimer = null;
+    const container = document.getElementById('game');
+    const scoreEl = document.getElementById('score');
+    const bestEl = document.getElementById('best');
+    const messageEl = document.getElementById('message');
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const yesBtn = document.getElementById('yesBtn');
+    const noBtn = document.getElementById('noBtn');
+
+    // Accessibility: announce state changes (aria-live)
+    function renderScore(){
+      scoreEl.innerText = `❤️ ${score}`;
+      const best = getBest();
+      bestEl.innerText = `Best: ❤️ ${best}`;
+    }
+
+    function getBest(){
+      return parseInt(localStorage.getItem('love_best') || '0', 10);
+    }
+    function setBest(n){
+      localStorage.setItem('love_best', String(n));
+    }
+
+    function updateBestIfNeeded(){
+      const best = getBest();
+      if(score > best){
+        setBest(score);
+        renderScore();
+      }
+    }
+
+    function randomBetween(min, max){
+      return Math.random() * (max - min) + min;
+    }
+
+    function createHeart(){
+      if(!running) return;
+      const existing = container.querySelectorAll('.heart').length;
+      if(existing >= maxConcurrentHearts) return;
+
+      const heart = document.createElement('div');
+      heart.className = 'heart';
+      heart.setAttribute('role','button');
+      heart.setAttribute('aria-label','Hati, klik untuk menjatuhkannya');
+      heart.tabIndex = 0;
+      heart.innerText = '❤️';
+
+      // random horizontal position (within viewport width)
+      const left = randomBetween(2, 90); // vw
+      const size = Math.round(randomBetween(heartMinSize, heartMaxSize));
+      heart.style.left = left + 'vw';
+      heart.style.fontSize = size + 'px';
+
+      // randomized animation duration for variety
+      const duration = (3 + Math.random() * 3).toFixed(2) + 's';
+      heart.style.animation = `fall ${duration} linear forwards`;
+
+      // small horizontal drift using transform translateX (changed over lifetime)
+      const drift = randomBetween(-10, 10);
+      heart.style.setProperty('--drift', drift + 'px');
+
+      // Click / pointerdown handler (works for touch)
+      const hit = (ev) => {
+        // prevent double counting from both pointer and keyboard handlers
+        ev.preventDefault && ev.preventDefault();
+        ev.stopPropagation && ev.stopPropagation();
+        collectHeart(heart);
+      };
+
+      // Keyboard support: Enter or Space collects the heart
+      const onKey = (ev) => {
+        if(ev.key === 'Enter' || ev.key === ' '){
+          ev.preventDefault();
+          collectHeart(heart);
+        }
+      };
+
+      heart.addEventListener('pointerdown', hit, {passive:false});
+      heart.addEventListener('keydown', onKey);
+
+      container.appendChild(heart);
+
+      const removeAfter = setTimeout(() => {
+        if(heart.parentNode) heart.remove();
+      }, heartLifetime);
+
+      // ensure cleanup when removed
+      heart.addEventListener('animationend', () => {
+        clearTimeout(removeAfter);
+        if(heart.parentNode) heart.remove();
+      });
+    }
+
+    function collectHeart(heartEl){
+      if(!heartEl || !heartEl.parentNode) return;
+      // visual feedback
+      heartEl.style.transition = 'transform 180ms ease, opacity 180ms ease';
+      heartEl.style.transform = 'scale(1.16) translateY(-10px)';
+      heartEl.style.opacity = '0.85';
+
+      // increment score
+      score++;
+      renderScore();
+
+      // remove heart after short delay so animation can be seen
+      setTimeout(()=> {
+        if(heartEl.parentNode) heartEl.remove();
+      }, 140);
+
+      if(score >= targetScore){
+        showMessage();
+        stop(); // stop spawning
+        updateBestIfNeeded();
+      }
+    }
+
+    function start(){
+      if(running) return;
+      running = true;
+      startBtn.setAttribute('aria-pressed','true');
+      pauseBtn.setAttribute('aria-pressed','false');
+
+      // spawn immediately and then at interval
+      createHeart();
+      spawnTimer = setInterval(createHeart, spawnInterval);
+    }
+
+    function stop(){
+      running = false;
+      startBtn.setAttribute('aria-pressed','false');
+      pauseBtn.setAttribute('aria-pressed','true');
+      if(spawnTimer){
+        clearInterval(spawnTimer);
+        spawnTimer = null;
+      }
+    }
+
+    function reset(){
+      score = 0;
+      renderScore();
+      // remove all hearts
+      const hearts = container.querySelectorAll('.heart');
+      hearts.forEach(h => h.remove());
+      // hide message if visible
+      hideMessage();
+      // reset running state
+      stop();
+    }
+
+    function showMessage(){
+      messageEl.style.display = 'flex';
+      // better focus handling
+      yesBtn.focus();
+    }
+    function hideMessage(){
+      messageEl.style.display = 'none';
+    }
+
+    // Button wiring
+    startBtn.addEventListener('click', () => {
+      start();
+    });
+    pauseBtn.addEventListener('click', () => {
+      if(running) stop(); else start();
+    });
+    resetBtn.addEventListener('click', () => {
+      reset();
+    });
+
+    yesBtn.addEventListener('click', () => {
+      alert('YEAY ❤️❤️❤️');
+      hideMessage();
+    });
+    noBtn.addEventListener('click', () => {
+      alert('Aku tetap nunggu 😊');
+      hideMessage();
+    });
+
+    // Pause spawns when page not visible
+    document.addEventListener('visibilitychange', () => {
+      if(document.hidden){
+        if(running){
+          // auto-pause but keep running flag so user can resume manually
+          clearInterval(spawnTimer);
+          spawnTimer = null;
+        }
+      } else {
+        if(running && !spawnTimer){
+          spawnTimer = setInterval(createHeart, spawnInterval);
+        }
+      }
+    });
+
+    // Initial render
+    renderScore();
+
+    // Expose a quick keyboard to start (Space when not focused in a button)
+    window.addEventListener('keydown', (ev) => {
+      if(ev.code === 'Space' && ev.target === document.body){
+        ev.preventDefault();
+        if(!running) start();
+      }
+    });
+
+    // If user wants us to auto-start: uncomment
+    // start();
+
+    // Clean startup: show best stored
+    (function initBestDisplay(){
+      renderScore();
+    })();
+  </script>
+</body>
+</html>
