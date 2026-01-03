@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Love Shooter 💘</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body {
+  margin: 0;
+  font-family: 'Arial', sans-serif;
+  background: linear-gradient(135deg, #ff5f6d, #ffc371);
+  overflow: hidden;
+  text-align: center;
+  color: white;
+}
+
+#score {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.heart {
+  position: absolute;
+  font-size: 40px;
+  cursor: pointer;
+  animation: float 5s linear infinite;
+}
+
+@keyframes float {
+  from { transform: translateY(100vh); }
+  to { transform: translateY(-100px); }
+}
+
+#message {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  padding: 20px;
+}
+
+#message h1 {
+  font-size: 28px;
+}
+
+button {
+  margin-top: 15px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 30px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.yes {
+  background: #ff5f6d;
+  color: white;
+}
+
+.no {
+  background: #ccc;
+}
+</style>
+</head>
+
+<body>
+
+<div id="score">❤️ 0</div>
+
+<div id="message">
+  <h1>💖 Aku suka kamu 💖</h1>
+  <p>Setelah semua hati ini, bolehkah aku menjagamu?</p>
+  <button class="yes" onclick="alert('YEAY ❤️❤️❤️')">Mau 💕</button>
+  <button class="no" onclick="alert('Aku tetap nunggu 😊')">Malu 🙈</button>
+</div>
+
+<script>
+let score = 0;
+const targetScore = 10;
+
+function createHeart() {
+  const heart = document.createElement("div");
+  heart.className = "heart";
+  heart.innerHTML = "❤️";
+  heart.style.left = Math.random() * 90 + "vw";
+  heart.style.animationDuration = (3 + Math.random() * 3) + "s";
+
+  heart.onclick = () => {
+    score++;
+    document.getElementById("score").innerText = "❤️ " + score;
+    heart.remove();
+
+    if (score >= targetScore) {
+      document.getElementById("message").style.display = "flex";
+    }
+  };
+
+  document.body.appendChild(heart);
+
+  setTimeout(() => {
+    heart.remove();
+  }, 6000);
+}
+
+setInterval(createHeart, 800);
+</script>
+
+</body>
+</html>
